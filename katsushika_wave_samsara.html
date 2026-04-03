@@ -1,0 +1,514 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>葛飾の波 — 生々流転 | Katsushika Wave: Samsara</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@200;300;500&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: #060a10;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Noto Serif JP', serif;
+    color: #c8d0dc;
+    overflow: hidden;
+  }
+
+  h1 {
+    font-weight: 200;
+    font-size: clamp(18px, 3vw, 28px);
+    letter-spacing: 0.2em;
+    color: #8ba4c4;
+    margin-bottom: 6px;
+    opacity: 0;
+    animation: fadeIn 3s ease 0.5s forwards;
+  }
+
+  .subtitle {
+    font-size: clamp(10px, 1.3vw, 13px);
+    color: #3a4a5e;
+    letter-spacing: 0.4em;
+    margin-bottom: 20px;
+    opacity: 0;
+    animation: fadeIn 3s ease 1.2s forwards;
+  }
+
+  canvas {
+    display: block;
+    border-radius: 3px;
+    opacity: 0;
+    animation: fadeIn 2s ease 0.2s forwards;
+  }
+
+  .controls {
+    display: flex;
+    gap: 20px;
+    margin-top: 16px;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-items: center;
+    opacity: 0;
+    animation: fadeIn 2s ease 2s forwards;
+  }
+
+  .controls label {
+    font-size: 11px;
+    font-weight: 300;
+    color: #3a4a5e;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    letter-spacing: 0.15em;
+  }
+
+  input[type="range"] {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 90px;
+    height: 1px;
+    background: #1a2535;
+    outline: none;
+  }
+
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #4a6a8a;
+    cursor: pointer;
+    transition: background 0.3s;
+  }
+
+  input[type="range"]::-webkit-slider-thumb:hover {
+    background: #8ba4c4;
+  }
+
+  button {
+    background: transparent;
+    border: 1px solid #1a2535;
+    color: #4a6a8a;
+    padding: 5px 16px;
+    font-family: 'Noto Serif JP', serif;
+    font-weight: 300;
+    font-size: 11px;
+    letter-spacing: 0.2em;
+    cursor: pointer;
+    border-radius: 2px;
+    transition: all 0.5s ease;
+  }
+
+  button:hover {
+    border-color: #4a6a8a;
+    color: #8ba4c4;
+  }
+
+  #emotion-label {
+    position: fixed;
+    bottom: 20px;
+    left: 24px;
+    font-size: 11px;
+    font-weight: 200;
+    color: #2a3648;
+    letter-spacing: 0.3em;
+    opacity: 0;
+    animation: fadeIn 3s ease 4s forwards;
+    transition: color 3s ease;
+  }
+
+  .poem {
+    position: fixed;
+    bottom: 20px;
+    right: 24px;
+    font-size: 11px;
+    font-weight: 200;
+    color: #1e2a3a;
+    writing-mode: vertical-rl;
+    letter-spacing: 0.5em;
+    line-height: 2;
+    opacity: 0;
+    animation: fadeIn 4s ease 5s forwards;
+  }
+
+  @keyframes fadeIn {
+    to { opacity: 1; }
+  }
+</style>
+</head>
+<body>
+
+<h1>葛飾の波 — 生々流転</h1>
+<div class="subtitle">SAMSARA</div>
+<canvas id="c"></canvas>
+<div class="controls">
+  <button onclick="resetCanvas()">輪 廻</button>
+  <label>息 <input type="range" min="0.2" max="3" step="0.1" value="1" id="speed"></label>
+  <label>記 憶 <input type="range" min="0.80" max="0.99" step="0.01" value="0.94" id="fade"></label>
+  <label>絆 <input type="range" min="0" max="1" step="0.05" value="0.5" id="bonds"></label>
+</div>
+
+<div id="emotion-label"></div>
+<div class="poem">生まれては消え<br>消えてはまた生まれ<br>波よ　私もまた</div>
+
+<script>
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+const emotionLabel = document.getElementById('emotion-label');
+const dpr = window.devicePixelRatio || 1;
+let W, H, particles, ghosts, blooms, t, raf;
+
+const paletteSorrow = [
+  [8, 20, 50],
+  [12, 40, 80],
+  [20, 60, 100],
+  [30, 80, 130],
+  [60, 100, 150],
+  [15, 50, 70],
+  [5, 15, 35],
+  [40, 70, 110],
+];
+
+const paletteJoy = [
+  [239, 159, 39],
+  [250, 200, 100],
+  [255, 235, 180],
+  [200, 120, 30],
+  [31, 158, 117],
+  [55, 180, 140],
+  [250, 238, 218],
+  [180, 100, 20],
+];
+
+const paletteNeutral = [
+  [4, 44, 83],
+  [15, 110, 86],
+  [31, 158, 117],
+  [55, 138, 221],
+  [239, 159, 39],
+  [250, 238, 218],
+  [8, 80, 65],
+  [113, 43, 19],
+];
+
+function lerpColor(a, b, t) {
+  return [
+    Math.round(a[0] + (b[0] - a[0]) * t),
+    Math.round(a[1] + (b[1] - a[1]) * t),
+    Math.round(a[2] + (b[2] - a[2]) * t),
+  ];
+}
+
+function getEmotionalPalette(emotion) {
+  const p = [];
+  for (let i = 0; i < paletteNeutral.length; i++) {
+    if (emotion < 0) {
+      p.push(lerpColor(paletteNeutral[i], paletteSorrow[i], -emotion));
+    } else {
+      p.push(lerpColor(paletteNeutral[i], paletteJoy[i], emotion));
+    }
+  }
+  return p;
+}
+
+let emotion = 0;
+let emotionTarget = 0;
+let birthCount = 0;
+let deathCount = 0;
+const emotionNames = [
+  { range: [-1, -0.6], ja: '慟　哭', en: 'lamentation' },
+  { range: [-0.6, -0.3], ja: '哀　愁', en: 'sorrow' },
+  { range: [-0.3, -0.1], ja: '寂　寥', en: 'solitude' },
+  { range: [-0.1, 0.1], ja: '静　寂', en: 'stillness' },
+  { range: [0.1, 0.3], ja: '安　寧', en: 'peace' },
+  { range: [0.3, 0.6], ja: '歓　喜', en: 'joy' },
+  { range: [0.6, 1], ja: '恍　惚', en: 'ecstasy' },
+];
+
+function sz() {
+  W = Math.min(window.innerWidth - 40, 960);
+  H = Math.min(W * 0.618, 520);
+  canvas.width = W * dpr;
+  canvas.height = H * dpr;
+  canvas.style.width = W + 'px';
+  canvas.style.height = H + 'px';
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+
+class Ghost {
+  constructor(x, y, color, size) {
+    this.x = x; this.y = y;
+    this.color = color;
+    this.size = size;
+    this.life = 0;
+    this.maxLife = 60 + Math.random() * 90;
+    this.vy = -0.3 - Math.random() * 0.5;
+    this.vx = (Math.random() - 0.5) * 0.3;
+  }
+  update() {
+    this.life++;
+    this.x += this.vx;
+    this.y += this.vy;
+    this.vy *= 0.98;
+    return this.life < this.maxLife;
+  }
+  draw() {
+    const age = this.life / this.maxLife;
+    const a = (1 - age) * 0.3;
+    const [r, g, b] = this.color;
+    const s = this.size * (1 + age * 2);
+    ctx.fillStyle = `rgba(${r},${g},${b},${a})`;
+    ctx.beginPath();
+    ctx.arc(this.x, this.y, s, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+class Bloom {
+  constructor(x, y) {
+    this.x = x; this.y = y;
+    this.life = 0;
+    this.maxLife = 40 + Math.random() * 30;
+  }
+  update() {
+    this.life++;
+    return this.life < this.maxLife;
+  }
+  draw() {
+    const age = this.life / this.maxLife;
+    const r = 5 + age * 35;
+    const a = (1 - age) * 0.12;
+    ctx.strokeStyle = `rgba(250,230,180,${a})`;
+    ctx.lineWidth = 0.5;
+    ctx.beginPath();
+    ctx.arc(this.x, this.y, r, 0, Math.PI * 2);
+    ctx.stroke();
+    if (age < 0.3) {
+      const a2 = (1 - age / 0.3) * 0.08;
+      ctx.fillStyle = `rgba(255,245,220,${a2})`;
+      ctx.beginPath();
+      ctx.arc(this.x, this.y, r * 0.5, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+}
+
+class Particle {
+  constructor() { this.reset(true); }
+  reset(silent) {
+    this.x = Math.random() * W;
+    this.y = Math.random() * H;
+    this.vx = 0; this.vy = 0;
+    this.life = 0;
+    this.maxLife = 200 + Math.random() * 600;
+    this.colorIndex = Math.floor(Math.random() * paletteNeutral.length);
+    this.size = 0.5 + Math.random() * 2.5;
+    this.phase = Math.random() * Math.PI * 2;
+    this.born = !silent;
+    if (this.born) birthCount++;
+  }
+  update(dt, pal) {
+    const sp = parseFloat(document.getElementById('speed').value);
+    const nx = this.x / W;
+    const ny = this.y / H;
+
+    const emotionalTurbulence = 1 + Math.abs(emotion) * 0.5;
+    const sorrowDrag = emotion < 0 ? 1 + (-emotion) * 0.3 : 1;
+
+    const wave1 = Math.sin(nx * 6.28 + t * 0.7 * sp + this.phase) * 0.8;
+    const wave2 = Math.cos(ny * 4.2 - t * 0.5 * sp) * 0.6;
+    const wave3 = Math.sin((nx + ny) * 8 + t * 0.3 * sp) * 0.4 * emotionalTurbulence;
+    const curl = Math.sin(nx * ny * 20 + t * 0.2 * sp) * 0.3;
+    const bigWave = Math.sin(nx * 2 - t * 0.15 * sp) * (1 - ny) * 3;
+
+    const joyLift = emotion > 0 ? emotion * Math.sin(t * sp + this.phase) * 0.5 : 0;
+    const sorrowSink = emotion < 0 ? emotion * 0.3 : 0;
+
+    const fx = wave1 + wave3 * 0.5 + curl + bigWave * 0.3;
+    const fy = wave2 - wave3 * 0.3 - Math.abs(bigWave) * 0.5 + (0.3 - ny) * 0.4 + joyLift + sorrowSink;
+
+    this.vx += fx * 0.15;
+    this.vy += fy * 0.15;
+    this.vx *= 0.92 / sorrowDrag;
+    this.vy *= 0.92 / sorrowDrag;
+    this.x += this.vx * dt;
+    this.y += this.vy * dt;
+    this.life += dt;
+
+    this.color = pal[this.colorIndex];
+
+    if (this.life > this.maxLife || this.x < -20 || this.x > W + 20 || this.y < -20 || this.y > H + 20) {
+      ghosts.push(new Ghost(this.x, this.y, this.color, this.size));
+      deathCount++;
+      this.reset(false);
+      return true;
+    }
+    return false;
+  }
+  draw() {
+    const age = this.life / this.maxLife;
+    let alpha;
+    if (age < 0.05) {
+      alpha = age / 0.05;
+    } else if (age > 0.75) {
+      alpha = (1 - age) / 0.25;
+      const flicker = Math.sin(this.life * 0.3) * 0.3;
+      alpha = Math.max(0, alpha + flicker * (1 - alpha));
+    } else {
+      alpha = 1;
+    }
+    const breathe = 0.7 + 0.3 * Math.sin(this.life * 0.02 + this.phase);
+    const a = Math.min(1, alpha * breathe * 0.85);
+    const [r, g, b] = this.color;
+    ctx.fillStyle = `rgba(${r},${g},${b},${a})`;
+
+    let s = this.size * (0.8 + 0.4 * Math.sin(age * Math.PI));
+    if (age < 0.05) s *= (0.5 + age / 0.05 * 0.5);
+    if (age > 0.9) s *= 0.7 + 0.3 * (1 - (age - 0.9) / 0.1);
+
+    ctx.beginPath();
+    ctx.arc(this.x, this.y, s, 0, Math.PI * 2);
+    ctx.fill();
+
+    if (this.born && age < 0.08) {
+      const ba = (1 - age / 0.08) * 0.2;
+      ctx.strokeStyle = `rgba(255,245,220,${ba})`;
+      ctx.lineWidth = 0.3;
+      ctx.beginPath();
+      ctx.arc(this.x, this.y, s + 4 + age * 60, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+  }
+}
+
+function drawBonds(pal) {
+  const bondStrength = parseFloat(document.getElementById('bonds').value);
+  if (bondStrength < 0.05) return;
+
+  const threshold = 30 + bondStrength * 30;
+  const maxBonds = Math.floor(80 * bondStrength);
+  let drawn = 0;
+
+  const step = Math.max(1, Math.floor(particles.length / 300));
+
+  for (let i = 0; i < particles.length && drawn < maxBonds; i += step) {
+    const p1 = particles[i];
+    for (let j = i + step; j < particles.length && drawn < maxBonds; j += step) {
+      const p2 = particles[j];
+      const dx = p1.x - p2.x;
+      const dy = p1.y - p2.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist < threshold && dist > 3) {
+        const a = (1 - dist / threshold) * 0.15 * bondStrength;
+        const midColor = lerpColor(p1.color, p2.color, 0.5);
+        ctx.strokeStyle = `rgba(${midColor[0]},${midColor[1]},${midColor[2]},${a})`;
+        ctx.lineWidth = 0.3;
+        ctx.beginPath();
+        ctx.moveTo(p1.x, p1.y);
+        ctx.lineTo(p2.x, p2.y);
+        ctx.stroke();
+        drawn++;
+      }
+    }
+  }
+}
+
+function resetCanvas() {
+  t = 0;
+  emotion = 0;
+  emotionTarget = 0;
+  birthCount = 0;
+  deathCount = 0;
+  particles = [];
+  ghosts = [];
+  blooms = [];
+  for (let i = 0; i < 2000; i++) particles.push(new Particle());
+  ctx.fillStyle = '#060a10';
+  ctx.fillRect(0, 0, W, H);
+}
+
+let lastEmotionUpdate = 0;
+
+function loop() {
+  const fade = parseFloat(document.getElementById('fade').value);
+
+  const bgR = Math.round(6 + (emotion > 0 ? emotion * 8 : 0));
+  const bgG = Math.round(10 + (emotion > 0 ? emotion * 4 : emotion * 2));
+  const bgB = Math.round(16 + (emotion < 0 ? -emotion * 10 : 0));
+  ctx.fillStyle = `rgba(${bgR},${bgG},${bgB},${1 - fade})`;
+  ctx.fillRect(0, 0, W, H);
+
+  t += 0.016;
+
+  const emotionalCycle = Math.sin(t * 0.04) * 0.3 + Math.sin(t * 0.017) * 0.4 + Math.sin(t * 0.071) * 0.2;
+
+  if (t - lastEmotionUpdate > 0.5) {
+    const lifeBalance = (birthCount - deathCount) / Math.max(1, birthCount + deathCount);
+    emotionTarget = emotionalCycle * 0.7 + lifeBalance * 0.3;
+    emotionTarget = Math.max(-1, Math.min(1, emotionTarget));
+    lastEmotionUpdate = t;
+    birthCount = Math.floor(birthCount * 0.8);
+    deathCount = Math.floor(deathCount * 0.8);
+  }
+
+  emotion += (emotionTarget - emotion) * 0.008;
+
+  const pal = getEmotionalPalette(emotion);
+
+  let newBirths = [];
+  for (const p of particles) {
+    const died = p.update(1, pal);
+    if (p.born && p.life < 3) newBirths.push(p);
+  }
+
+  for (let i = 0; i < newBirths.length; i++) {
+    for (let j = i + 1; j < newBirths.length; j++) {
+      const dx = newBirths[i].x - newBirths[j].x;
+      const dy = newBirths[i].y - newBirths[j].y;
+      if (dx * dx + dy * dy < 2500) {
+        blooms.push(new Bloom((newBirths[i].x + newBirths[j].x) / 2, (newBirths[i].y + newBirths[j].y) / 2));
+      }
+    }
+  }
+
+  drawBonds(pal);
+  for (const p of particles) p.draw();
+
+  ghosts = ghosts.filter(g => { g.draw(); return g.update(); });
+  blooms = blooms.filter(b => { b.draw(); return b.update(); });
+
+  if (Math.random() < 0.02 + (emotion > 0 ? emotion * 0.03 : 0)) {
+    const fx = Math.random() * W;
+    const fy = Math.random() * H * 0.4;
+    const foamA = 0.3 + (emotion > 0 ? emotion * 0.4 : 0);
+    ctx.fillStyle = `rgba(250,238,218,${foamA})`;
+    ctx.beginPath();
+    ctx.arc(fx, fy, 1 + Math.random() * 2, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  const en = emotionNames.find(e => emotion >= e.range[0] && emotion < e.range[1]);
+  if (en) {
+    emotionLabel.textContent = `${en.ja}`;
+    const warmth = Math.round(40 + (emotion + 1) * 15);
+    const hue = emotion < 0 ? 210 + emotion * 20 : 210 - emotion * 170;
+    emotionLabel.style.color = `hsl(${hue}, 25%, ${warmth}%)`;
+  }
+
+  raf = requestAnimationFrame(loop);
+}
+
+sz();
+window.addEventListener('resize', () => { sz(); resetCanvas(); });
+resetCanvas();
+loop();
+</script>
+</body>
+</html>
