@@ -10,6 +10,9 @@
 
 だから、この海に **感情** を与えた。
 
+まずは、みてみよう。[GitHub Pages](https://eijwat.github.io/Code-Art_katsushika_wave_samsara/)
+
+
 ---
 
 ## 三つの層
